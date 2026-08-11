@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Currency Converter</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: linear-gradient(135deg, #0f172a, #1e293b);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    color: #f1f5f9;
+  }
+  .card {
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 16px;
+    padding: 32px;
+    width: 100%;
+    max-width: 420px;
+    box-shadow: 0 20px 60px rgba(0,0,0,.4);
+  }
+  h1 { font-size: 20px; margin-bottom: 4px; }
+  .sub { color: #94a3b8; font-size: 13px; margin-bottom: 24px; }
+  .tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 20px; }
+  .tab {
+    padding: 10px; border-radius: 10px; border: 1px solid #334155;
+    background: #0f172a; color: #94a3b8; font-size: 13px; cursor: pointer;
+    text-align: center; transition: .15s;
+  }
+  .tab.active { background: #6366f1; color: #fff; border-color: #6366f1; }
+  label { font-size: 12px; color: #94a3b8; display: block; margin-bottom: 6px; }
+  input {
+    width: 100%; padding: 14px; border-radius: 10px; border: 1px solid #334155;
+    background: #0f172a; color: #f1f5f9; font-size: 18px; margin-bottom: 18px;
+    outline: none;
+  }
+  input:focus { border-color: #6366f1; }
+  .result {
+    background: #0f172a; border: 1px solid #334155; border-radius: 10px;
+    padding: 16px; font-size: 24px; font-weight: 600; word-break: break-all;
+  }
+  .rate { font-size: 12px; color: #64748b; margin-top: 10px; }
+  .err { color: #f87171; font-size: 12px; margin-top: 10px; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>Currency Converter</h1>
+  <div class="sub">Kurs real-time</div>
+
+  <div class="tabs" id="tabs"></div>
+
+  <label id="inLabel">Jumlah</label>
+  <input id="amount" type="number" value="1" inputmode="decimal">
+
+  <div class="result" id="result">-</div>
+  <div class="rate" id="rateInfo"></div>
+  <div class="err" id="err"></div>
+</div>
+
+<script>
+const modes = [
+  { key: 'usd-idr', label: 'USD → IDR', from: 'USD', to: 'IDR', mul: 1 },
+  { key: 'idr-usd', label: 'IDR → USD', from: 'IDR', to: 'USD', mul: 1 },
+  { key: 'idr-usc', label: 'IDR → USC', from: 'IDR', to: 'USD', mul: 100 },
+  { key: 'usc-idr', label: 'USC → IDR', from: 'USD', to: 'IDR', mul: 0.01 },
+];
+
+let current = modes[0];
+let rateCache = {};
+
+const tabsEl = document.getElementById('tabs');
+const amountEl = document.getElementById('amount');
+const resultEl = document.getElementById('result');
+const rateInfoEl = document.getElementById('rateInfo');
+const errEl = document.getElementById('err');
+const inLabelEl = document.getElementById('inLabel');
+
+tabsEl.innerHTML = modes.map(m => `<div class="tab" data-key="${m.key}">${m.label}</div>`).join('');
+
+function setActive(key) {
+  current = modes.find(m => m.key === key);
+  [...tabsEl.children].forEach(t => t.classList.toggle('active', t.dataset.key === key));
+  inLabelEl.textContent = `Jumlah (${current.key.split('-')[0].toUpperCase()})`;
+  convert();
+}
+
+tabsEl.addEventListener('click', e => {
+  const t = e.target.closest('.tab');
+  if (t) setActive(t.dataset.key);
+});
+
+async function getRate(from) {
+  if (rateCache[from] && Date.now() - rateCache[from].time < 60000) return rateCache[from].data;
+  const res = await fetch(`https://open.er-api.com/v6/latest/${from}`);
+  if (!res.ok) throw new Error('fetch gagal');
+  const data = await res.json();
+  if (data.result !== 'success') throw new Error('api error');
+  rateCache[from] = { data, time: Date.now() };
+  return data;
+}
+
+async function convert() {
+  errEl.textContent = '';
+  const amt = parseFloat(amountEl.value) || 0;
+  try {
+    const data = await getRate(current.from);
+    const rate = data.rates[current.to] * current.mul;
+    const converted = amt * rate;
+    resultEl.textContent = converted.toLocaleString('id-ID', { maximumFractionDigits: 4 });
+    rateInfo.textContent = `1 ${current.key.split('-')[0].toUpperCase()} = ${rate.toLocaleString('id-ID', { maximumFractionDigits: 6 })} ${current.key.split('-')[1].toUpperCase()}`;
+  } catch (e) {
+    errEl.textContent = 'Gagal ambil kurs, coba lagi.';
+  }
+}
+
+amountEl.addEventListener('input', convert);
+setActive('usd-idr');
+</script>
+</body>
+</html>
